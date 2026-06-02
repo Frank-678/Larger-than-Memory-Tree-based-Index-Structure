@@ -1,14 +1,12 @@
-#ifndef common_H
-#define common_H 
+#pragma once
+#include <cstdint>
 
-#include "bits/stdc++.h"
+// 物理页大小锁定为 4096 字节
+constexpr int PAGE_SIZE = 4096;
+using page_id_t = int32_t;
+using frame_id_t = int32_t;
+constexpr page_id_t INVALID_PAGE_ID = -1;
 
-// // 起一个限制容量的作用, 好像不需要这样
-// using page_id_t = int64_t;
-// using frame_id_t = int8_t;
-// using page_table_id_t = int8_t;
-
-// 这个是data的大小，这里设置成固定的了，也可以换成string，中期后可以升级变长数据的处理
-using data_t = int32_t; 
-
-#endif
+// 定长主键与定长数值
+using KeyType = int64_t;
+using ValueType = int64_t;
