@@ -1,3 +1,6 @@
+#ifdef _WIN32
+#include <windows.h>
+#endif    
 #include <iostream>
 #include <cassert>
 #include "disk_manager.h"
@@ -5,6 +8,11 @@
 #include "bplus_tree.h"
 
 int main() {
+    #ifdef _WIN32
+    SetConsoleOutputCP(65001); // 强制控制台输出为 UTF-8
+    SetConsoleCP(65001);       // 强制控制台输入为 UTF-8
+    #endif
+
     std::cout << "========= 测试，启动！ =========" << std::endl;
 
     // 1. 初始化物理环境。分配极小的物理内存（例如 3 页），测试超内存置换能力
