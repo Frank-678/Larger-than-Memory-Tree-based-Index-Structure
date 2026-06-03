@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
 project(YearProject CXX)
 
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -13,4 +17,7 @@ set(SOURCES
 
 add_executable(ltm_index ${SOURCES})
 
-target_include_directories(ltm_index PRIVATE /include)
+target_include_directories(ltm_index PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
