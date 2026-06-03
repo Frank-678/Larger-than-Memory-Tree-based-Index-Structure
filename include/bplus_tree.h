@@ -3,13 +3,13 @@
 #include "buffer_pool.h"
 #include <utility>
 
-// 基于定长槽位机制的 B+ 树物理面具
+// 基于定长槽位机制的 B+ 树节点
 struct BPlusTreeNodeHeader {
     bool is_leaf_;
     int32_t current_size_;
     int32_t max_size_;
     page_id_t next_page_id_;
-    // 物理分配 250 个定长槽位。总大小绝对受控在 4096 以内
+    // 分配 250 个定长槽位。总大小绝对受控在 4096 以内
     std::pair<KeyType, ValueType> array_[250]; 
 };
 
