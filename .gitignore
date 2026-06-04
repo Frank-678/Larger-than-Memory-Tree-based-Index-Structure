@@ -69,3 +69,6 @@ Testing/
 
 # vscode
 .vscode/
+
+# visualizer by images
+LTM_Report_Images/
