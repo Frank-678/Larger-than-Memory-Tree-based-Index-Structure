@@ -1,12 +1,8 @@
-# LTM B+ 树数据生成与可视化系统
+# 通用Larger-than-Memory树形索引结构框架的设计与实现
 
-## 项目概述
+## 测试，启动！
 
-本系统实现了一个完整的**数据生成 → CSV导出 → 可视化图表**的一键执行管道，用于测试B+ Tree索引结构在0～1M量级数据下的真实性能指标。
-
-## 快速开始
-
-### Windows 用户（推荐）
+### Windows 用户
 
 ```cmd
 cd 项目目录
@@ -22,7 +18,7 @@ bash scripts/run.sh
 
 ## 系统生成的数据与图表
 
-### 📊 生成的CSV数据文件
+### 生成的CSV数据文件
 
 | 文件名 | 描述 | 数据规模 |
 |-------|------|-------|
@@ -34,12 +30,12 @@ bash scripts/run.sh
 | `lru_eviction_analysis.csv` | LRU 淘汰效果分析 | 多种工作集大小 |
 | `mixed_workload.csv` | 混合工作负载测试 | 30% Insert + 50% Lookup + 20% Update |
 
-### 📈 生成的可视化图表
+### 生成的可视化图表
 
 | 图表 | 用途 | 对比指标 |
 |------|------|--------|
 | `cache_efficiency.png` | 缓冲池效率分析 | 命中率 vs 淘汰频率（双Y轴） |
-| `dashboard_summary.png` | 性能指标总览 | 4个关键指标汇总展示 |
+| `dashboard_summary.png` | 性能指标总览 | 4个指标汇总展示 |
 | `dirty_pages_timeline.png` | 脏页动态分析 | 脏页数量与清理成本 |
 | `io_pattern_comparison.png` | 磁盘I/O模式对比 | 顺序 vs 随机吞吐量 |
 | `lru_eviction_analysis.png` | LRU淘汰分析 | 工作集大小与淘汰频率 |
@@ -49,7 +45,7 @@ bash scripts/run.sh
 
 ### 1. C++ 数据生成模块 (`src/main.cpp`)
 
-7 个新增基准函数，覆盖多种性能场景：
+7 个基准函数，覆盖多种性能场景：
 
 ```cpp
 ✓ Topology_BPlusTree_Lookup_Performance()
@@ -80,12 +76,6 @@ bash scripts/run.sh
 ✓ plot_lru_eviction_analysis()    # LRU 淘汰
 ✓ plot_summary_dashboard()        # 汇总仪表板
 ```
-
-**特点：**
-- 多曲线对比
-- 双Y轴支持
-- 中文字体支持
-- 150dpi高分辨率输出
 
 ### 3. 自动化管道
 
@@ -143,16 +133,6 @@ Lookup IOPS 按规模变化：
 └── build/                                # 编译输出目录
 ```
 
-## 技术栈
-
-| 层级 | 技术 |
-|------|------|
-| **C++** | C++17 标准库、CMake |
-| **Python** | matplotlib、pandas、seaborn |
-| **Shell/Batch** | Bash、Batch 脚本 |
-| **数据格式** | CSV（便于Excel/数据库导入） |
-| **可视化** | PNG（150dpi，适合学位论文） |
-
 ## 性能指标解释
 
 ### IOPS（Lookup）
@@ -186,12 +166,3 @@ const std::vector<int> scales = {100, 500, 1000, ...};  // 改为需要的规模
 
 ### Q: 数据文件在哪里？
 **A:** 所有 CSV 和 PNG 都在 `data/` 目录中。
-
-## 联系与改进
-
-如有问题或建议，欢迎提交 Issue 或 Pull Request。
-
----
-
-**更新日期**：2025年6月5日  
-**版本**：1.0（支持 Windows/Linux/Mac）

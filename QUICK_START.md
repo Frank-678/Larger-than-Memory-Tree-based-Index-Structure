@@ -1,6 +1,6 @@
 # ⚡ 快速开始指南
 
-## 一键执行完整数据生成与可视化流程
+## 一键执行测试流程
 
 ### 🪟 Windows 用户
 
@@ -63,7 +63,7 @@ bash scripts/run.sh
 
 所有生成的文件都在 **`data/`** 目录中：
 
-### 📊 CSV 数据文件（可用 Excel、Python、R 分析）
+### 📊 CSV 数据文件
 - `lookup_iops_by_scale.csv` — 查询性能随数据量变化
 - `cache_hitrate_by_pool_size.csv` — 缓冲池大小与命中率
 - `tree_height_evolution.csv` — B+ 树结构演化
@@ -72,7 +72,7 @@ bash scripts/run.sh
 - `lru_eviction_analysis.csv` — LRU 淘汰频率分析
 - `mixed_workload.csv` — 混合工作负载性能测试
 
-### 📈 PNG 图表（150dpi，适合论文插入）
+### 📈 PNG 图表（150dpi）
 - `dashboard_summary.png` — 性能指标总览
 - `cache_efficiency.png` — 缓冲池效率分析
 - `tree_height_evolution.png` — 树高演化曲线
@@ -82,7 +82,7 @@ bash scripts/run.sh
 
 ---
 
-## 🔧 系统需求
+## 系统需求
 
 ### 最小配置
 | 项目 | 要求 |
@@ -104,9 +104,9 @@ ERROR: Python not found!
 
 ---
 
-## 📝 执行流程详解
+## 执行流程详解
 
-### 1️⃣ 编译阶段（~30 秒）
+### 1️⃣ 编译阶段
 ```
 [3] Building C++ project...
   └─ CMake configure
@@ -114,7 +114,7 @@ ERROR: Python not found!
   └─ Link & generate ltm_index.exe
 ```
 
-### 2️⃣ 数据生成阶段（~3-5 分钟）
+### 2️⃣ 数据生成阶段
 ```
 [4] Running tests and generating data...
   ├─ Topology_BPlusTree_Lookup_Performance()      → lookup_iops_by_scale.csv
@@ -126,7 +126,7 @@ ERROR: Python not found!
   └─ Topology_Mixed_Workload_Test()               → mixed_workload.csv
 ```
 
-### 3️⃣ 可视化生成阶段（~10 秒）
+### 3️⃣ 可视化生成阶段
 ```
 [5] Generating visualization charts...
   └─ Python 读取 7 个 CSV 文件
@@ -136,7 +136,7 @@ ERROR: Python not found!
 
 ---
 
-## 🚀 进阶用法
+## 更多用法
 
 ### 修改测试规模
 
@@ -172,53 +172,3 @@ cd "项目根目录"
 ```cmd
 python benchmark_visualizer.py
 ```
-
----
-
-## ❓ 常见问题
-
-### Q1: 脚本执行失败，提示 "CMake not found"
-**A:** 请安装 CMake：
-- Windows: 从 https://cmake.org/download/ 下载安装
-- macOS: `brew install cmake`
-- Linux: `sudo apt install cmake`
-
-### Q2: 运行时间很长，是否正常？
-**A:** 是的，1M 规模的基准测试需要几分钟。可以修改 `src/main.cpp` 中的规模参数来加速。
-
-### Q3: 图表怎么导入到 Word/PowerPoint？
-**A:** 直接拖拽 PNG 文件到文档中即可（150dpi 分辨率适合学位论文）。
-
-### Q4: CSV 数据怎么在 Excel 中打开？
-**A:** 
-1. 打开 Excel
-2. 文件 → 打开 → 选择 `data/*.csv`
-3. 导入向导中选择逗号作为分隔符
-
-### Q5: 如何在 Python 中分析数据？
-**A:** 参考示例：
-```python
-import pandas as pd
-import matplotlib.pyplot as plt
-
-# 读取数据
-df = pd.read_csv('data/lookup_iops_by_scale.csv')
-print(df)
-
-# 绘制自定义图表
-plt.plot(df['Scale'], df['Lookup_IOPS'], marker='o')
-plt.xlabel('Data Scale')
-plt.ylabel('IOPS')
-plt.show()
-```
-
----
-
-## 📖 更多信息
-
-完整文档请查看 **`README_CN.md`**
-
----
-
-**版本**：1.0  
-**最后更新**：2025年6月5日
