@@ -70,5 +70,8 @@ Testing/
 # vscode
 .vscode/
 
-# visualizer by images
-LTM_Report_Images/
+# data and images
+data/
+
+# 中间文件
+*.db
