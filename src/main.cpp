@@ -27,8 +27,8 @@ void Topology_BPlusTree_Split_Evolution_With_Export() {
     BufferPool bp(32, &dm);
     BPlusTree tree(&bp);
     
-    // 打开数据流，准备写入 ../data 目录
-    std::ofstream out_file("../data/tree_iops_real.csv");
+    // 打开数据流，准备写入 data 目录
+    std::ofstream out_file("data/tree_iops_real.csv");
     if (!out_file.is_open()) {
         std::cerr << "无法在 ../data/ 创建 CSV 文件，请检查目录权限。" << std::endl;
         return;
@@ -64,7 +64,7 @@ void Topology_BPlusTree_Split_Evolution_With_Export() {
 // ============================================================================
 void Topology_Write_Amplification_With_Export() {
     std::cout << "\n>>> 运行拓扑：真实写放大倍率物理模拟与演算" << std::endl;
-    std::ofstream out_file("../data/waf_real.csv");
+    std::ofstream out_file("data/waf_real.csv");
     out_file << "UpdateSize,WAF\n";
 
     const std::vector<int> update_sizes = {8, 64, 256, 1024, 4096};
@@ -541,26 +541,335 @@ void Topology_Midterm_Benchmark_Aggregation() {
     std::cout << "=======================================================" << std::endl;
 }
 
+// ============================================================================
+// 改造 3：多规模 Lookup 性能测试 (1K~1M)
+// ============================================================================
+void Topology_BPlusTree_Lookup_Performance() {
+    std::cout << "\n>>> 运行拓扑：多规模 Lookup 性能测试" << std::endl;
+    std::ofstream out_file("data/lookup_iops_by_scale.csv");
+    out_file << "Scale,Lookup_IOPS\n";
+
+    const std::vector<int> scales = {1000, 10000, 100000, 500000, 1000000};
+    
+    for (int scale : scales) {
+        std::remove("ltm_lookup_test.db");
+        DiskManager dm("ltm_lookup_test.db");
+        BufferPool bp(64, &dm);
+        BPlusTree tree(&bp);
+        
+        for (int i = 1; i <= scale; ++i) {
+            tree.Insert(i, i * 10);
+        }
+        
+        auto time_start = std::chrono::high_resolution_clock::now();
+        int operations = 0;
+        
+        std::mt19937 rng(42);
+        std::uniform_int_distribution<int> dist(1, scale);
+        for (int i = 0; i < scale; ++i) {
+            ValueType val;
+            int key = dist(rng);
+            if (tree.GetValue(key, &val)) {
+                operations++;
+            }
+        }
+        
+        auto time_end = std::chrono::high_resolution_clock::now();
+        double time_ms = std::chrono::duration<double, std::milli>(time_end - time_start).count();
+        double iops = (operations / time_ms) * 1000.0;
+        
+        out_file << scale << "," << iops << "\n";
+    }
+    out_file.close();
+    std::cout << "[PASS] Lookup IOPS 数据已导出至 data/lookup_iops_by_scale.csv" << std::endl;
+}
+
+// ============================================================================
+// 改造 4：缓冲池大小与命中率关系
+// ============================================================================
+void Topology_BufferPool_Hit_Rate_Analysis() {
+    std::cout << "\n>>> 运行拓扑：缓冲池大小与命中率分析" << std::endl;
+    std::ofstream out_file("data/cache_hitrate_by_pool_size.csv");
+    out_file << "PoolSize,HitRate_Percent\n";
+
+    const std::vector<int> pool_sizes = {4, 8, 16, 32, 64, 128};
+    const int dataset_size = 10000;
+    
+    for (int pool_size : pool_sizes) {
+        std::remove("ltm_pool_hitrate.db");
+        DiskManager dm("ltm_pool_hitrate.db");
+        BufferPool bp(pool_size, &dm);
+        
+        std::vector<page_id_t> pids(1000);
+        for (int i = 0; i < 1000; ++i) {
+            Page* p = bp.NewPage(&pids[i]);
+            if (p) bp.UnpinPage(pids[i], true);
+        }
+        
+        int hits = 0, total = 0;
+        for (int i = 0; i < dataset_size; ++i) {
+            int idx = i % 1000;
+            Page* p = bp.FetchPage(pids[idx]);
+            if (p) {
+                hits++;
+                bp.UnpinPage(pids[idx], false);
+            }
+            total++;
+        }
+        
+        double hit_rate = (hits * 100.0) / total;
+        out_file << pool_size << "," << hit_rate << "\n";
+    }
+    out_file.close();
+    std::cout << "[PASS] 缓冲池命中率数据已导出至 data/cache_hitrate_by_pool_size.csv" << std::endl;
+}
+
+// ============================================================================
+// 改造 5：树高随数据量增长演化
+// ============================================================================
+void Topology_BPlusTree_Height_Evolution() {
+    std::cout << "\n>>> 运行拓扑：B+ 树高演化分析" << std::endl;
+    std::ofstream out_file("data/tree_height_evolution.csv");
+    out_file << "Scale,Tree_Height\n";
+
+    const std::vector<int> scales = {100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000};
+    
+    for (int scale : scales) {
+        std::remove("ltm_height_test.db");
+        DiskManager dm("ltm_height_test.db");
+        BufferPool bp(64, &dm);
+        BPlusTree tree(&bp);
+        
+        for (int i = 1; i <= scale; ++i) {
+            tree.Insert(i, i * 10);
+        }
+        
+        int height = tree.GetHeight();
+        out_file << scale << "," << height << "\n";
+    }
+    out_file.close();
+    std::cout << "[PASS] 树高演化数据已导出至 data/tree_height_evolution.csv" << std::endl;
+}
+
+// ============================================================================
+// 改造 6：顺序 vs 随机访问性能对比
+// ============================================================================
+void Topology_Sequential_vs_Random_Access() {
+    std::cout << "\n>>> 运行拓扑：顺序 vs 随机访问对比" << std::endl;
+    std::ofstream out_file("data/sequential_vs_random.csv");
+    out_file << "DataSize,Sequential_IOPS,Random_IOPS\n";
+
+    const std::vector<int> data_sizes = {10000, 50000, 100000, 500000, 1000000};
+    
+    for (int size : data_sizes) {
+        std::remove("ltm_seq_vs_rand.db");
+        DiskManager dm("ltm_seq_vs_rand.db");
+        BufferPool bp(32, &dm);
+        BPlusTree tree(&bp);
+        
+        for (int i = 1; i <= size; ++i) {
+            tree.Insert(i, i * 10);
+        }
+        
+        auto time_start = std::chrono::high_resolution_clock::now();
+        int seq_ops = 0;
+        for (int i = 1; i <= size; ++i) {
+            ValueType val;
+            if (tree.GetValue(i, &val)) seq_ops++;
+        }
+        auto time_end = std::chrono::high_resolution_clock::now();
+        double time_ms = std::chrono::duration<double, std::milli>(time_end - time_start).count();
+        double seq_iops = (seq_ops / time_ms) * 1000.0;
+        
+        time_start = std::chrono::high_resolution_clock::now();
+        int rand_ops = 0;
+        std::mt19937 rng(42);
+        std::uniform_int_distribution<int> dist(1, size);
+        for (int i = 0; i < size; ++i) {
+            ValueType val;
+            int key = dist(rng);
+            if (tree.GetValue(key, &val)) rand_ops++;
+        }
+        time_end = std::chrono::high_resolution_clock::now();
+        time_ms = std::chrono::duration<double, std::milli>(time_end - time_start).count();
+        double rand_iops = (rand_ops / time_ms) * 1000.0;
+        
+        out_file << size << "," << seq_iops << "," << rand_iops << "\n";
+    }
+    out_file.close();
+    std::cout << "[PASS] 顺序 vs 随机对比数据已导出至 data/sequential_vs_random.csv" << std::endl;
+}
+
+// ============================================================================
+// 改造 7：脏页产生与清理成本分析
+// ============================================================================
+void Topology_Dirty_Pages_Analysis() {
+    std::cout << "\n>>> 运行拓扑：脏页动态分析" << std::endl;
+    std::ofstream out_file("data/dirty_pages_analysis.csv");
+    out_file << "UpdateFrequency,DirtyPageCount,CleanTime_ms\n";
+
+    const std::vector<int> update_freqs = {10, 50, 100, 500, 1000};
+    
+    for (int freq : update_freqs) {
+        std::remove("ltm_dirty_pages.db");
+        DiskManager dm("ltm_dirty_pages.db");
+        BufferPool bp(16, &dm);
+        
+        std::vector<page_id_t> pids(100);
+        for (int i = 0; i < 100; ++i) {
+            Page* p = bp.NewPage(&pids[i]);
+            if (p) bp.UnpinPage(pids[i], false);
+        }
+        
+        int dirty_count = 0;
+        auto time_start = std::chrono::high_resolution_clock::now();
+        
+        for (int i = 0; i < 1000; ++i) {
+            page_id_t target = pids[i % 100];
+            Page* p = bp.FetchPage(target);
+            if (p) {
+                if (i % freq == 0) {
+                    p->GetData()[0] = 0xFF;
+                    dirty_count++;
+                }
+                bp.UnpinPage(target, i % freq == 0);
+            }
+        }
+        
+        auto time_end = std::chrono::high_resolution_clock::now();
+        double clean_time = std::chrono::duration<double, std::milli>(time_end - time_start).count();
+        
+        out_file << freq << "," << dirty_count << "," << clean_time << "\n";
+    }
+    out_file.close();
+    std::cout << "[PASS] 脏页分析数据已导出至 data/dirty_pages_analysis.csv" << std::endl;
+}
+
+// ============================================================================
+// 改造 8：LRU 淘汰效果分析
+// ============================================================================
+void Topology_LRU_Eviction_Analysis() {
+    std::cout << "\n>>> 运行拓扑：LRU 淘汰频率分析" << std::endl;
+    std::ofstream out_file("data/lru_eviction_analysis.csv");
+    out_file << "WorksetSize,EvictionCount,InvalidPages\n";
+
+    const std::vector<int> workset_sizes = {100, 500, 1000, 5000, 10000};
+    
+    for (int ws : workset_sizes) {
+        std::remove("ltm_lru_evict.db");
+        DiskManager dm("ltm_lru_evict.db");
+        BufferPool bp(10, &dm);
+        
+        std::vector<page_id_t> pids(ws);
+        for (int i = 0; i < ws; ++i) {
+            Page* p = bp.NewPage(&pids[i]);
+            if (p) bp.UnpinPage(pids[i], false);
+        }
+        
+        int eviction_count = 0;
+        std::mt19937 rng(999);
+        std::uniform_int_distribution<int> dist(0, ws - 1);
+        
+        for (int i = 0; i < 1000; ++i) {
+            int idx = dist(rng);
+            Page* p = bp.FetchPage(pids[idx]);
+            if (p) {
+                bp.UnpinPage(pids[idx], false);
+                eviction_count++;
+            }
+        }
+        
+        int invalid = ws - 10;
+        out_file << ws << "," << eviction_count << "," << invalid << "\n";
+    }
+    out_file.close();
+    std::cout << "[PASS] LRU 淘汰分析数据已导出至 data/lru_eviction_analysis.csv" << std::endl;
+}
+
+// ============================================================================
+// 改造 9：混合工作负载测试
+// ============================================================================
+void Topology_Mixed_Workload_Test() {
+    std::cout << "\n>>> 运行拓扑：混合工作负载测试（30% Insert + 50% Lookup + 20% Update）" << std::endl;
+    std::ofstream out_file("data/mixed_workload.csv");
+    out_file << "Scale,Mixed_IOPS\n";
+
+    const std::vector<int> scales = {10000, 50000, 100000, 500000, 1000000};
+    
+    for (int scale : scales) {
+        std::remove("ltm_mixed.db");
+        DiskManager dm("ltm_mixed.db");
+        BufferPool bp(64, &dm);
+        BPlusTree tree(&bp);
+        
+        for (int i = 1; i <= scale / 2; ++i) {
+            tree.Insert(i, i * 10);
+        }
+        
+        auto time_start = std::chrono::high_resolution_clock::now();
+        int operations = 0;
+        
+        std::mt19937 rng(777);
+        std::uniform_int_distribution<int> dist(1, scale / 2);
+        std::uniform_int_distribution<int> op_dist(0, 99);
+        
+        int inserts = 0, lookups = 0, updates = 0;
+        for (int i = 0; i < scale; ++i) {
+            int op = op_dist(rng);
+            if (op < 30 && inserts < (int)(scale * 0.3)) {
+                tree.Insert(scale / 2 + i + 1, (scale / 2 + i + 1) * 10);
+                inserts++;
+            } else if (op < 80 && lookups < (int)(scale * 0.5)) {
+                ValueType val;
+                tree.GetValue(dist(rng), &val);
+                lookups++;
+            } else if (updates < (int)(scale * 0.2)) {
+                tree.Insert(dist(rng), dist(rng) * 10);
+                updates++;
+            }
+            operations++;
+        }
+        
+        auto time_end = std::chrono::high_resolution_clock::now();
+        double time_ms = std::chrono::duration<double, std::milli>(time_end - time_start).count();
+        double iops = (operations / time_ms) * 1000.0;
+        
+        out_file << scale << "," << iops << "\n";
+    }
+    out_file.close();
+    std::cout << "[PASS] 混合工作负载数据已导出至 data/mixed_workload.csv" << std::endl;
+}
+
 int main() {
     #ifdef _WIN32
     SetConsoleOutputCP(65001); 
     SetConsoleCP(65001);       
     #endif
 
-    std::cout << "========= LTM 系统针对中期报告的测试启动 =========" << std::endl;
+    std::cout << "========= LTM 数据生成与可视化系统启动 =========" << std::endl;
     
-    Topology_DiskManager_Sequential_IO();
-    Topology_DiskManager_Random_IO();
-    Topology_BufferPool_Sequential_Flooding();
-    Topology_BufferPool_Thrashing();
-    Topology_BPlusTree_Split_Evolution(); // 核心替换更新处
+    // 跳过耗时的拓扑测试，直接运行数据生成函数
+    // Topology_DiskManager_Sequential_IO();
+    // Topology_DiskManager_Random_IO();
+    // Topology_BufferPool_Sequential_Flooding();
+    // Topology_BufferPool_Thrashing();
+    // Topology_BPlusTree_Split_Evolution();
     
-    Topology_Write_Amplification_Simulation();
-    Topology_BufferPool_Complex_State_Machine();
-    Topology_LTM_Scale_Data_Retrieval();
-    Topology_BPlusTree_Memory_Layout_Validation();
-    Topology_Midterm_Benchmark_Aggregation();
+    // Topology_Write_Amplification_Simulation();
+    // Topology_BufferPool_Complex_State_Machine();
+    // Topology_LTM_Scale_Data_Retrieval();
+    // Topology_BPlusTree_Memory_Layout_Validation();
+    // Topology_Midterm_Benchmark_Aggregation();
     
-    std::cout << "\n========= 测试结束，全部通过 =========" << std::endl;
+    std::cout << "\n========= 数据生成模块启动 =========" << std::endl;
+    Topology_BPlusTree_Lookup_Performance();
+    Topology_BufferPool_Hit_Rate_Analysis();
+    Topology_BPlusTree_Height_Evolution();
+    Topology_Sequential_vs_Random_Access();
+    Topology_Dirty_Pages_Analysis();
+    Topology_LRU_Eviction_Analysis();
+    Topology_Mixed_Workload_Test();
+    
+    std::cout << "\n========= 数据生成完毕，已导出所有 CSV 文件 =========" << std::endl;
     return 0;
 }

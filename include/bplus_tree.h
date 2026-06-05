@@ -19,8 +19,10 @@ public:
 
     bool Insert(const KeyType& key, const ValueType& value);
     bool GetValue(const KeyType& key, ValueType* result);
+    int GetHeight() const;
 
 private:
     BufferPool* buffer_pool_;
     page_id_t root_page_id_;
+    int tree_height_ = 0;
 };

@@ -1,0 +1,6 @@
+UpdateFrequency,DirtyPageCount,CleanTime_ms
+10,100,1.087
+50,20,1.3053
+100,10,1.0547
+500,2,1.0084
+1000,1,1.0326
