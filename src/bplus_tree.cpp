@@ -220,3 +220,27 @@ bool BPlusTree::Insert(const KeyType& key, const ValueType& value) {
 
     return true;
 }
+
+int BPlusTree::GetHeight() const {
+    if (root_page_id_ == INVALID_PAGE_ID) return 0;
+    
+    int height = 0;
+    page_id_t curr_id = root_page_id_;
+    Page* page = const_cast<BufferPool*>(buffer_pool_)->FetchPage(curr_id);
+    auto* node = reinterpret_cast<BPlusTreeNodeHeader*>(page->GetData());
+    
+    while (!node->is_leaf_) {
+        height++;
+        page_id_t next_id = static_cast<page_id_t>(node->array_[0].second);
+        const_cast<BufferPool*>(buffer_pool_)->UnpinPage(curr_id, false);
+        
+        curr_id = next_id;
+        page = const_cast<BufferPool*>(buffer_pool_)->FetchPage(curr_id);
+        node = reinterpret_cast<BPlusTreeNodeHeader*>(page->GetData());
+    }
+    
+    height++; // 计入叶子层
+    const_cast<BufferPool*>(buffer_pool_)->UnpinPage(curr_id, false);
+    
+    return height;
+}
