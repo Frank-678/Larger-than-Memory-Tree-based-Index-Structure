@@ -23,7 +23,7 @@ bool BufferPool::FindVictim(frame_id_t* out_frame_id) {
         free_list_.pop_front();
         return true;
     }
-    // 执行 LRU 置换算法：从链表头部找到一个 pin_count == 0 的页剔除
+    // Scan LRU list (front = least recently used) for an unpinned page to evict
     for (auto it = lru_list_.begin(); it != lru_list_.end(); ++it) {
         frame_id_t frame_id = *it;
         if (pages_[frame_id].pin_count_ == 0) {
@@ -36,14 +36,14 @@ bool BufferPool::FindVictim(frame_id_t* out_frame_id) {
             return true;
         }
     }
-    return false; // 内存池爆满且全被锁定，触发 OOM 级异常
+    return false; // All frames pinned: no victim available
 }
 
 Page* BufferPool::FetchPage(page_id_t page_id) {
     if (page_table_.find(page_id) != page_table_.end()) {
         frame_id_t frame_id = page_table_[page_id];
         pages_[frame_id].pin_count_++;
-        lru_list_.remove(frame_id); // 移出 LRU，防止活跃页被杀
+        lru_list_.remove(frame_id); // Remove from LRU to prevent eviction
         return &pages_[frame_id];
     }
 
@@ -86,7 +86,7 @@ bool BufferPool::UnpinPage(page_id_t page_id, bool is_dirty) {
     pages_[frame_id].pin_count_--;
     if (is_dirty) pages_[frame_id].is_dirty_ = true;
 
-    // 当页面完全无人使用时，推入 LRU 候选队列尾部
+    // If unpinned, add to the tail of the LRU list (becomes evictable)
     if (pages_[frame_id].pin_count_ == 0) {
         lru_list_.push_back(frame_id);
     }

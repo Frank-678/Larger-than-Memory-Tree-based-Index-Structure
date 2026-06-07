@@ -13,6 +13,8 @@ set(SOURCES
 	src/disk_manager.cpp
 	src/buffer_pool.cpp
 	src/bplus_tree.cpp
+	src/correctness_tests.cpp
+	src/benchmark_tests.cpp
 )
 
 add_executable(ltm_index ${SOURCES})

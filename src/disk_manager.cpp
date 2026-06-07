@@ -5,6 +5,7 @@ DiskManager::DiskManager(const std::string& file_name) : file_name_(file_name), 
     db_file_.open(file_name_, std::ios::in | std::ios::out | std::ios::binary);
     
     if (!db_file_.is_open()) {
+        // File doesn't exist: create it
         db_file_.open(file_name_, std::ios::out | std::ios::in | std::ios::trunc | std::ios::binary);
         if (!db_file_.is_open()) {
             std::cerr << "Fail to open/create file: " << file_name_ << std::endl;
@@ -12,12 +13,10 @@ DiskManager::DiskManager(const std::string& file_name) : file_name_(file_name), 
         }
         next_page_id_ = 0;
     } else {
+        // File exists: compute next_page_id from file size
         db_file_.seekg(0, std::ios::end);
-        
         std::streampos file_size = db_file_.tellg();
-        
         next_page_id_ = static_cast<page_id_t>(file_size / PAGE_SIZE);
-        
         db_file_.seekg(0, std::ios::beg);
         db_file_.seekp(0, std::ios::beg);
     }

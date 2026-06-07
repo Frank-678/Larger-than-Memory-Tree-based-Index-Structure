@@ -16,8 +16,8 @@ private:
     friend class BufferPool;
     inline void ResetMemory() { std::memset(data_, 0, PAGE_SIZE); }
 
-    char data_[PAGE_SIZE];                // 4KB 字节数组
-    page_id_t page_id_ = INVALID_PAGE_ID; // 当前装载的逻辑页号
-    int pin_count_ = 0;                   // 引用计数，非0不会被 LRU 淘汰
-    bool is_dirty_ = false;               // 脏页标记
+    char data_[PAGE_SIZE];                // 4KB raw data buffer
+    page_id_t page_id_ = INVALID_PAGE_ID; // Logical page number loaded
+    int pin_count_ = 0;                   // Non-zero prevents LRU eviction
+    bool is_dirty_ = false;               // Modified since last disk write
 };

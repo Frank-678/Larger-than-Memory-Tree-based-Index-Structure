@@ -1,8 +1,8 @@
-# ⚡ 快速开始指南
+# 快速开始指南
 
 ## 一键执行测试流程
 
-### 🪟 Windows 用户
+### Windows 用户
 
 **方式 1：直接运行批处理脚本**
 
@@ -10,16 +10,26 @@
 run.bat
 ```
 
-**方式 2：在 PowerShell 中运行**
+**方式 2：手动编译运行**
 
-```powershell
-.\run.bat
+```cmd
+g++ -std=c++17 -O2 -I include src/*.cpp -o build\ltm_index.exe
+build\ltm_index.exe
+python benchmark_visualizer.py
 ```
 
-### 🐧 Linux / 🍎 macOS 用户
+### Linux / macOS 用户
 
 ```bash
 bash scripts/run.sh
+```
+
+或手动：
+
+```bash
+g++ -std=c++17 -O2 -I include src/*.cpp -o build/ltm_index
+./build/ltm_index
+python benchmark_visualizer.py
 ```
 
 ---
@@ -33,142 +43,161 @@ bash scripts/run.sh
    LTM B+ Tree - Data Generation & Visualization
 ==============================================================
 
-[1] Checking environment...         ✓ CMake, C++ compiler, Python found
-[2] Creating data directories...    ✓ Ready
-[3] Building C++ project...         ✓ Compilation succeeded
+[1] Checking environment...         CMake, C++ compiler, Python found
+[2] Creating data directories...    Ready
+[3] Building C++ project...         Compilation succeeded
 [4] Running tests and generating data...
-    ✓ lookup_iops_by_scale.csv
-    ✓ cache_hitrate_by_pool_size.csv
+    Correctness: 94/94 passed
+    Benchmarks:
+    ✓ lookup_iops_by_scale.csv       (3/2 次重复)
+    ✓ cache_pressure_by_pool_size.csv (3 次重复)
     ✓ tree_height_evolution.csv
-    ✓ sequential_vs_random.csv
-    ✓ dirty_pages_analysis.csv
-    ✓ lru_eviction_analysis.csv
+    ✓ sequential_vs_random.csv       (3/2 次重复)
+    ✓ write_amplification.csv
     ✓ mixed_workload.csv
+    ✓ working_set_pressure.csv       (3 次重复)
 [5] Generating visualization charts...
+    ✓ iops_comparison.png
     ✓ cache_efficiency.png
-    ✓ dashboard_summary.png
-    ✓ dirty_pages_timeline.png
-    ✓ io_pattern_comparison.png
-    ✓ lru_eviction_analysis.png
     ✓ tree_height_evolution.png
+    ✓ io_pattern_comparison.png
+    ✓ waf_analysis.png
+    ✓ working_set_pressure.png
+    ✓ dashboard_summary.png
 
 ==============================================================
-   ✓ Pipeline completed successfully!
+   Pipeline completed successfully!  0 failed
 ==============================================================
 ```
 
 ---
 
-## 📂 输出文件位置
+## 输出文件位置
 
-所有生成的文件都在 **`data/`** 目录中：
+所有生成的文件都在 **`data/`** 目录中。
 
-### 📊 CSV 数据文件
-- `lookup_iops_by_scale.csv` — 查询性能随数据量变化
-- `cache_hitrate_by_pool_size.csv` — 缓冲池大小与命中率
-- `tree_height_evolution.csv` — B+ 树结构演化
-- `sequential_vs_random.csv` — 顺序 vs 随机访问性能对比
-- `dirty_pages_analysis.csv` — 脏页产生与清理成本
-- `lru_eviction_analysis.csv` — LRU 淘汰频率分析
-- `mixed_workload.csv` — 混合工作负载性能测试
+### CSV 数据文件
 
-### 📈 PNG 图表（150dpi）
-- `dashboard_summary.png` — 性能指标总览
-- `cache_efficiency.png` — 缓冲池效率分析
-- `tree_height_evolution.png` — 树高演化曲线
-- `io_pattern_comparison.png` — I/O 模式对比
-- `dirty_pages_timeline.png` — 脏页动态变化
-- `lru_eviction_analysis.png` — LRU 淘汰分析
+| 文件 | 说明 |
+|------|------|
+| `lookup_iops_by_scale.csv` | 随机查找吞吐量 vs 数据规模（含重复运行列） |
+| `cache_pressure_by_pool_size.csv` | 缓存压力：固定工作集 200 页，变 Pool 大小 |
+| `tree_height_evolution.csv` | B+ 树高度随数据量的演化 |
+| `sequential_vs_random.csv` | 顺序 vs 随机访问（含访问模式列） |
+| `write_amplification.csv` | 写放大倍数随更新粒度变化 |
+| `mixed_workload.csv` | 混合负载（30% 插入 + 50% 查找 + 20% 更新） |
+| `working_set_pressure.csv` | 固定 Pool=10，变工作集大小 |
+
+### PNG 图表（150dpi）
+
+| 图表 | 内容 |
+|------|------|
+| `iops_comparison.png` | IOPS 对比（纯查找 + 混合负载，含重复运行） |
+| `cache_efficiency.png` | 缓存压力趋势（标注工作集阈值） |
+| `tree_height_evolution.png` | 树高演化 + 理论曲线 |
+| `io_pattern_comparison.png` | 顺序 vs 随机（含重复运行 + 标准差色带） |
+| `waf_analysis.png` | 写放大柱状图（标注 SSD/HDD 阈值） |
+| `working_set_pressure.png` | 工作集压力曲线（标注 Pool 边界） |
+| `dashboard_summary.png` | 4 图汇总仪表板 |
 
 ---
 
 ## 系统需求
 
 ### 最小配置
+
 | 项目 | 要求 |
 |------|------|
-| **C++ 编译器** | GCC 7.0+ / MSVC 2017+ / Clang 5.0+ |
-| **CMake** | 3.10+ |
-| **Python** | 3.6+ |
-| **磁盘空间** | ≥ 500MB（用于 1M 规模测试） |
-| **内存** | ≥ 2GB（用于 1M 规模测试） |
-| **运行时间** | ~5-10 分钟（包括 1M 规模基准） |
-
-### 依赖检查
-脚本会自动检查所有依赖。如果缺少某个工具，会显示错误信息：
-```
-ERROR: CMake not found!
-ERROR: C++ compiler not found!
-ERROR: Python not found!
-```
+| **C++ 编译器** | GCC 7.0+ / MSVC 2017+ / Clang 5.0+（需 C++17） |
+| **CMake** | 3.10+（可选，可用 g++ 直接编译） |
+| **Python** | 3.6+（pandas, matplotlib, numpy） |
+| **磁盘空间** | ≥ 500 MB（用于 1M 规模测试） |
+| **内存** | ≥ 2 GB |
+| **运行时间** | ~5-8 分钟（含 7 个基准测试 + 重复测量） |
 
 ---
 
 ## 执行流程详解
 
 ### 1️⃣ 编译阶段
+
 ```
-[3] Building C++ project...
-  └─ CMake configure
-  └─ Compile 7 benchmark functions
-  └─ Link & generate ltm_index.exe
+源文件：
+  src/main.cpp                → 入口点
+  src/correctness_tests.cpp   → 7 个正确性测试
+  src/benchmark_tests.cpp     → 7 个基准测试
+  src/bplus_tree.cpp          → B+ 树核心
+  src/buffer_pool.cpp         → 缓冲池核心
+  src/disk_manager.cpp        → 磁盘管理器核心
+
+编译命令：
+  g++ -std=c++17 -O2 -I include src/*.cpp -o build/ltm_index.exe
 ```
 
 ### 2️⃣ 数据生成阶段
+
+程序执行顺序：正确性测试（94 个断言点）→ 基准测试（7 个基准）
+
 ```
-[4] Running tests and generating data...
-  ├─ Topology_BPlusTree_Lookup_Performance()      → lookup_iops_by_scale.csv
-  ├─ Topology_BufferPool_Hit_Rate_Analysis()      → cache_hitrate_by_pool_size.csv
-  ├─ Topology_BPlusTree_Height_Evolution()        → tree_height_evolution.csv
-  ├─ Topology_Sequential_vs_Random_Access()       → sequential_vs_random.csv
-  ├─ Topology_Dirty_Pages_Analysis()              → dirty_pages_analysis.csv
-  ├─ Topology_LRU_Eviction_Analysis()             → lru_eviction_analysis.csv
-  └─ Topology_Mixed_Workload_Test()               → mixed_workload.csv
+Benchmark_Lookup_Performance()       → lookup_iops_by_scale.csv
+Benchmark_Cache_Pressure()           → cache_pressure_by_pool_size.csv
+Benchmark_Tree_Height_Evolution()    → tree_height_evolution.csv
+Benchmark_Sequential_vs_Random()     → sequential_vs_random.csv
+Benchmark_Write_Amplification()      → write_amplification.csv
+Benchmark_Mixed_Workload()           → mixed_workload.csv
+Benchmark_WorkingSet_Throughput()    → working_set_pressure.csv
 ```
 
 ### 3️⃣ 可视化生成阶段
+
 ```
-[5] Generating visualization charts...
-  └─ Python 读取 7 个 CSV 文件
-  └─ matplotlib 生成 6 个图表
-  └─ 所有图表保存为 PNG
+Python 读取 7 个 CSV 文件
+  → plot_with_repeats() 绘制重复测量数据
+  → matplotlib 生成 7 个图表
+  → 所有图表保存为 data/*.png（150dpi）
 ```
 
 ---
 
 ## 更多用法
 
-### 修改测试规模
+### 编译不运行
 
-编辑 `src/main.cpp`，修改各函数的 `scales` 向量：
+```bash
+cd build && cmake .. && cmake --build . --config Release
+```
+
+### 仅生成数据（跳过编译）
+
+```bash
+build/ltm_index.exe      # Windows
+./build/ltm_index        # Linux/Mac
+```
+
+### 仅生成图表（跳过数据生成）
+
+```bash
+python benchmark_visualizer.py
+```
+
+### 修改测试参数
+
+编辑 `src/benchmark_tests.cpp`，修改各函数的参数向量。例如修改缓存压力测试的 Pool 大小：
 
 ```cpp
-// 例：修改 Topology_BPlusTree_Height_Evolution()
-const std::vector<int> scales = {100, 500, 1000, 5000, 10000, 50000, 100000};
-// 改为：
-const std::vector<int> scales = {1000, 10000, 100000, 1000000};  // 大规模测试
-
-// 重新运行
-run.bat  // Windows
-bash scripts/run.sh  # Linux/Mac
+// 默认值
+const std::vector<int> pool_sizes = {4, 8, 16, 32, 64, 128, 256};
+// 改为更大范围
+const std::vector<int> pool_sizes = {2, 4, 8, 16, 32, 64, 128, 256, 512};
 ```
 
-### 只运行某个功能
+重新编译运行即可生效。
 
-**仅编译：**
-```cmd
-cd build
-cmake ..
-cmake --build . --config Release
-```
+### 调整重复测量次数
 
-**仅生成数据（跳过重新编译）：**
-```cmd
-cd "项目根目录"
-.\build\Release\ltm_index.exe
-```
+编辑 `src/benchmark_tests.cpp` 顶部的常量：
 
-**仅生成图表（跳过数据生成）：**
-```cmd
-python benchmark_visualizer.py
+```cpp
+static constexpr int REPEATS = 3;        // 小规模重复次数
+static constexpr int REPEATS_LARGE = 2;  // 大规模重复次数
 ```
