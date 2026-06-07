@@ -34,6 +34,14 @@ python benchmark_visualizer.py
 
 ---
 
+## 文档索引
+
+| 文档 | 内容 |
+|------|------|
+| [README.md](./README.md) | B+ 树三层架构设计、各模块实现细节、构建指南 |
+| [README_BENCHMARK_ANALYSIS.md](./README_BENCHMARK_ANALYSIS.md) | 7 项基准测试的深度分析：多层次多角度、完整数据表、嵌入式图表、方差分析 |
+| [QUICK_START.md](./QUICK_START.md) | 快速开始指南（本文档） |
+
 ## 预期输出
 
 脚本会自动执行以下步骤，生成完整的数据与图表：
