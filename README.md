@@ -2,6 +2,30 @@
 
 基于 B+ 树的磁盘感知索引引擎，专为 **Larger-than-Memory** 场景设计。当索引数据超过物理内存容量时，通过缓冲池与磁盘管理器的配合，透明地在内存与磁盘之间调度页面，使上层 B+ 树算法无需感知页面在内存还是磁盘上。
 
+---
+
+## 近期优化
+
+### 1. LRU 缓存管理改用侵入式链表
+
+原实现使用 `std::list<frame_id_t>` 管理 LRU 顺序，每次缓存命中时调用 `lru_list_.remove(frame_id)` 执行线性遍历。当缓冲池较大时，本应纳秒级完成的缓存命中操作退化为耗时的全局扫描，且 `std::list` 的节点插入删除伴随堆内存分配（malloc/free），在微秒级测时中引入方差抖动。
+
+优化方案：预分配 `LRUNode[pool_size_]` 数组，利用 `frame_id` 天然为数组下标的特性，通过 `DetachFromLRU(frame_id)` 和 `AppendToLRU(frame_id)` 进行纯索引操作的链表剥离与重组。所有 LRU 操作从 O(N) 降为 O(1)，且**完全消除堆内存分配**。
+
+### 2. AllocatePage 同步扩展物理文件
+
+原有 `AllocatePage()` 仅在内存中递增计数器，不对物理文件做扩展。若程序在分配后、脏页写回前崩溃，重启后通过 `file_size / PAGE_SIZE` 恢复的 `next_page_id_` 将发生回退，导致新分配的页 ID 与历史记录碰撞，破坏 B+ 树拓扑结构。
+
+优化方案：`AllocatePage` 在分配逻辑 ID 的同时，向物理文件对应偏移写入单字节以完成空间预留，借助操作系统稀疏文件机制将 I/O 开销降至最低。新增崩溃恢复正确性测试，验证重启后页 ID 的连续性与数据完整性。
+
+### 3. fstream 状态机防御性保护
+
+I/O 操作失败后 C++ 标准库会将流内部的 `failbit` 置位，导致后续所有读写调用被静默拦截。原实现未对 `std::fstream` 的状态进行重置。
+
+优化方案：所有 `ReadPage`/`WritePage`/`AllocatePage` 操作前调用 `db_file_.clear()` 重置流状态，`ReadPage` 添加 `offset >= file_size_` 边界检查并返回空数据而非静默传播错误。
+
+---
+
 ## 三层架构
 
 ```
@@ -88,7 +112,9 @@ file_size = 文件字节数
 next_page_id_ = file_size / PAGE_SIZE
 ```
 
-这保证了重启后新分配的页 ID 不会与已有页面冲突。
+`AllocatePage()` 在返回新页 ID 的同时，向物理文件末尾写入单字节以预留空间（利用操作系统稀疏文件机制避免全量零填充）。这保证了即使进程在分配后、写回前崩溃，重启后 `next_page_id_` 仍能正确恢复，不会出现页 ID 回退碰撞。
+
+所有 I/O 函数（`ReadPage`、`WritePage`、`AllocatePage`）执行前均调用 `db_file_.clear()` 重置流状态，防止前次 I/O 失败遗留的 `failbit` 导致后续操作静默失效。`ReadPage` 同时进行 `offset >= file_size_` 边界检查，越界读取时返回空数据而非使流进入错误状态。
 
 ### 数据结构
 
@@ -97,6 +123,7 @@ next_page_id_ = file_size / PAGE_SIZE
 | `db_file_` | `std::fstream` | 数据库文件流 |
 | `file_name_` | `std::string` | 文件路径 |
 | `next_page_id_` | `page_id_t` | 下一个可用页 ID，从 0 开始单调递增 |
+| `file_size_` | `std::streampos` | 缓存的物理文件大小（字节） |
 
 ---
 
@@ -133,17 +160,19 @@ FetchPage(page_id)
 
 **LRU 淘汰算法**
 
-`lru_list_` 是一个 `std::list<frame_id_t>`，按最近使用时间排序：
+`lru_nodes_` 是一个预分配的 `LRUNode[pool_size_]` 数组，通过数组下标（即 `frame_id`）定位节点，使用 `prev`/`next` 索引维护双向链表顺序：
 
-- **队头**：最久未使用的页面（下次淘汰候选）
-- **队尾**：最近刚 unpin 的页面（刚使用完）
+- **链表头**（`lru_head_`）：最久未使用的页面（下次淘汰候选）
+- **链表尾**（`lru_tail_`）：最近刚 unpin 的页面（刚使用完）
+
+缓存命中时调用 `DetachFromLRU(frame_id)` 以 O(1) 时间将节点从 LRU 链表剥离（防止被淘汰）；Unpin 后调用 `AppendToLRU(frame_id)` 以 O(1) 时间将节点追加至链表尾部。所有操作均为纯数组索引运算，无堆内存分配。
 
 淘汰时从头扫描 LRU 链表，找到第一个 `pin_count == 0` 的帧：
 
 ```cpp
-for (frame_id : lru_list_) {
-    if (pages_[frame_id].pin_count_ == 0) {
-        if (pages_[frame_id].is_dirty_)
+for (int cur = lru_head_; cur != -1; cur = lru_nodes_[cur].next) {
+    if (pages_[cur].pin_count_ == 0) {
+        if (pages_[cur].is_dirty_)
             disk_manager_->WritePage(...);  // 脏页回写
         page_table_.erase(page_id);
         return 该帧;
@@ -166,7 +195,7 @@ for (frame_id : lru_list_) {
 
 **空闲帧管理**
 
-初始化时将所有帧加入 `free_list_`。`FindVictim()` 优先从空闲列表分配，空闲列表用尽后才触发 LRU 淘汰。
+构造函数中将所有帧按顺序链入空闲链表（`free_head_` → `free_tail_`）。`FindVictim()` 优先调用 `PopFromFree()` 从空闲列表头部取出帧，空闲列表用尽后才触发 LRU 淘汰。
 
 ### Page 结构
 
@@ -185,8 +214,11 @@ class Page {
 |------|------|------|
 | `pages_` | `Page[]` | 堆上分配的物理页面数组（固定大小 `pool_size_`） |
 | `page_table_` | `unordered_map<page_id_t, frame_id_t>` | 页号到帧号的映射 |
-| `free_list_` | `list<frame_id_t>` | 从未使用的空闲帧 |
-| `lru_list_` | `list<frame_id_t>` | 可淘汰帧的 LRU 顺序链表 |
+| `lru_nodes_` | `LRUNode[]` | 预分配的侵入式链表节点数组，下标即 frame_id |
+| `free_head_` | `int` | 空闲链表头节点索引（-1 表示空） |
+| `free_tail_` | `int` | 空闲链表尾节点索引 |
+| `lru_head_` | `int` | LRU 链表头节点索引（最久未使用，-1 表示空） |
+| `lru_tail_` | `int` | LRU 链表尾节点索引（最近刚 unpin） |
 
 ---
 
@@ -444,7 +476,7 @@ cmake --build . --config Release
 ./build/ltm_index
 ```
 
-程序依次执行 7 个正确性测试（94 个断言点）和 7 个基准测试，生成 CSV 数据文件到 `data/` 目录。
+程序依次执行 8 个正确性测试（98 个断言点）和 7 个基准测试，生成 CSV 数据文件到 `data/` 目录。
 
 ### 可视化
 

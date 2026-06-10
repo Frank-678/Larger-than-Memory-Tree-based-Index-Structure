@@ -55,7 +55,7 @@ python benchmark_visualizer.py
 [2] Creating data directories...    Ready
 [3] Building C++ project...         Compilation succeeded
 [4] Running tests and generating data...
-    Correctness: 94/94 passed
+    Correctness: 98/98 passed
     Benchmarks:
     ✓ lookup_iops_by_scale.csv       (3/2 次重复)
     ✓ cache_pressure_by_pool_size.csv (3 次重复)
@@ -144,7 +144,7 @@ python benchmark_visualizer.py
 
 ### 2️⃣ 数据生成阶段
 
-程序执行顺序：正确性测试（94 个断言点）→ 基准测试（7 个基准）
+程序执行顺序：正确性测试（98 个断言点）→ 基准测试（7 个基准）
 
 ```
 Benchmark_Lookup_Performance()       → lookup_iops_by_scale.csv

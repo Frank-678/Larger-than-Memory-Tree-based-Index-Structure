@@ -305,6 +305,94 @@ static void Test_BufferPool_StateMachine() {
 }
 
 // ============================================================================
+// Test 8: Crash recovery — verifies that AllocatePage extends the physical file
+// so that next_page_id_ survives a process restart (simulated by re-opening
+// the DiskManager).  Without physical extension in AllocatePage, the old
+// code would recompute next_page_id_ = file_size / PAGE_SIZE after restart
+// and recycle page IDs, silently corrupting the B+ tree topology.
+// ============================================================================
+static void Test_Crash_Recovery() {
+    std::cout << "\n>>> [Test 8] Crash recovery: page ID persistence" << std::endl;
+    const std::string file_name = "ltm_test_8.db";
+    std::remove(file_name.c_str());
+
+    // Phase 1 — allocate and write N pages, then allocate M more pages
+    //           WITHOUT writing data (simulating crash after AllocatePage).
+    const int N = 20;
+    const int M = 10;
+    page_id_t first_batch_ids[N];
+
+    {
+        DiskManager dm(file_name);
+        AssertTopologicalPoint(dm.AllocatePage() == 0, "Test_8", 1,
+            "First allocated page ID is 0");
+
+        // Write N pages with identifiable data.
+        for (int i = 0; i < N; ++i) {
+            first_batch_ids[i] = dm.AllocatePage();
+            char buf[PAGE_SIZE];
+            std::memset(buf, static_cast<char>(i % 256), PAGE_SIZE);
+            dm.WritePage(first_batch_ids[i], buf);
+        }
+
+        // Allocate M more pages but do NOT write anything —
+        // simulates the window between AllocatePage and first use.
+        for (int i = 0; i < M; ++i) {
+            dm.AllocatePage();
+        }
+
+        // "Crash" — DiskManager destructor runs, file closes.
+        // next_page_id_ is lost from memory but the file on disk
+        // should reflect the extension from AllocatePage's single-byte write.
+    }
+
+    // Phase 2 — re-open the file (simulating restart) and verify.
+    {
+        DiskManager dm_restart(file_name);
+
+        // The restarted manager should have recovered next_page_id_ >= N+M.
+        page_id_t recovered_next = dm_restart.AllocatePage();
+        AssertTopologicalPoint(recovered_next >= N + M, "Test_8", 2,
+            "Recovered next_page_id_ (" + std::to_string(recovered_next)
+            + ") >= pre-crash allocation count (" + std::to_string(N + M) + ")");
+
+        // Verify the first batch of pages survived intact.
+        bool data_ok = true;
+        for (int i = 0; i < N; ++i) {
+            char read_buf[PAGE_SIZE];
+            std::memset(read_buf, 0, PAGE_SIZE);
+            dm_restart.ReadPage(first_batch_ids[i], read_buf);
+
+            for (int j = 0; j < PAGE_SIZE; ++j) {
+                if (read_buf[j] != static_cast<char>(i % 256)) {
+                    data_ok = false;
+                    break;
+                }
+            }
+            if (!data_ok) break;
+        }
+        AssertTopologicalPoint(data_ok, "Test_8", 3,
+            "All " + std::to_string(N) + " written pages preserved after crash restart");
+
+        // Allocate a new page and verify its ID does NOT collide with any
+        // previously-written page ID.
+        page_id_t new_pid = dm_restart.AllocatePage();
+        bool no_collision = true;
+        for (int i = 0; i < N; ++i) {
+            if (new_pid == first_batch_ids[i]) {
+                no_collision = false;
+                break;
+            }
+        }
+        AssertTopologicalPoint(no_collision, "Test_8", 4,
+            "New page ID (" + std::to_string(new_pid)
+            + ") does not collide with any previously written page");
+    }
+
+    std::cout << "  [OK] Crash recovery: page ID and data consistency verified" << std::endl;
+}
+
+// ============================================================================
 // Run all correctness tests
 // ============================================================================
 void RunAllCorrectnessTests() {
@@ -317,6 +405,7 @@ void RunAllCorrectnessTests() {
     Test_BufferPool_Flooding();
     Test_BufferPool_Thrashing();
     Test_BufferPool_StateMachine();
+    Test_Crash_Recovery();
 
     std::cout << "\n========== Correctness tests complete ==========" << std::endl;
 }
