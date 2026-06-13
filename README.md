@@ -470,13 +470,23 @@ cmake ..
 cmake --build . --config Release
 ```
 
-### 运行
+### 方式 4：完整基准流水线
 
 ```bash
-./build/ltm_index
+# Windows
+run.bat
 ```
 
-程序依次执行 8 个正确性测试（98 个断言点）和 7 个基准测试，生成 CSV 数据文件到 `data/` 目录。
+该脚本依次执行：
+1. CMake 构建（Release）
+2. 正确性测试（98 个断言点）
+3. 性能基准测试（7 个测试，重复机制：1 次预热 + 3 次稳态测量，大规模为 1+2）
+4. 自动生成 CSV 数据到 `data/` 目录
+5. 调用 `benchmark_visualizer.py` 生成 PNG 图表到同一目录
+
+**预热隔离（Warmup Isolation）**：所有重复测量的基准测试在首次计时前均执行预热循环（Cache
+Warm-up），使 CPU 睿频、分支预测器和缓存行进入饱和稳态。图表中的均值与标准差基于稳态
+（Warmup 之后）的计算结果，冷启动暂态以虚线单独绘制以揭示硬件预热物理现象。
 
 ### 可视化
 

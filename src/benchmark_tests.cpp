@@ -11,8 +11,8 @@
 
 // Measurement repeats for read-only benchmarks.
 // Expensive large-scale benchmarks use fewer repeats.
-static constexpr int REPEATS = 3;
-static constexpr int REPEATS_LARGE = 2;
+static constexpr int REPEATS = 4;       // 1 warm-up + 3 steady-state
+static constexpr int REPEATS_LARGE = 3; // 1 warm-up + 2 steady-state
 #include <cstring>
 #include <fstream>
 #include <string>
@@ -45,6 +45,12 @@ void Benchmark_Lookup_Performance() {
         std::vector<int> keys(scale);
         for (int i = 0; i < scale; ++i) keys[i] = dist(rng);
 
+        // --- WARM-UP: prime cache before any timed run ---
+        {
+            ValueType val;
+            for (int i = 0; i < scale; ++i) tree.GetValue(keys[i], &val);
+        }
+
         for (int r = 0; r < repeats; ++r) {
             auto time_start = std::chrono::high_resolution_clock::now();
             int operations = 0;
@@ -61,9 +67,6 @@ void Benchmark_Lookup_Performance() {
             double iops = (operations / time_ms) * 1000.0;
 
             out_file << scale << "," << r << "," << (int)iops << "\n";
-
-            // Warm cache: re-seed RNG for next run to use a different key order
-            // so we measure realistic warm-cache performance, not just sequential replay
         }
 
         // Print a one-line summary showing min and max across runs
@@ -99,6 +102,17 @@ void Benchmark_Cache_Pressure() {
             if (p) {
                 std::memset(p->GetData(), static_cast<char>(i), PAGE_SIZE);
                 bp.UnpinPage(pids[i], true);
+            }
+        }
+
+        // --- WARM-UP: prime cache ---
+        {
+            std::mt19937 rng_wu(static_cast<unsigned>(pool_size));
+            std::uniform_int_distribution<int> dist_wu(0, working_set - 1);
+            for (int i = 0; i < total_accesses / 10; ++i) {
+                int idx = dist_wu(rng_wu);
+                Page* p = bp.FetchPage(pids[idx]);
+                if (p) bp.UnpinPage(pids[idx], false);
             }
         }
 
@@ -172,6 +186,15 @@ void Benchmark_Sequential_vs_Random() {
 
         int rpt = (size <= 100000) ? REPEATS : REPEATS_LARGE;
 
+        // Prepare random key sequence (needed for both warm-up and timed runs)
+        std::mt19937 rng(42);
+        std::uniform_int_distribution<int> dist(1, size);
+        std::vector<int> keys(size);
+        for (int i = 0; i < size; ++i) keys[i] = dist(rng);
+
+        // --- WARM-UP: prime cache for sequential ---
+        { ValueType val; for (int i = 1; i <= size; ++i) tree.GetValue(i, &val); }
+
         // Sequential: rpt times
         for (int r = 0; r < rpt; ++r) {
             auto time_start = std::chrono::high_resolution_clock::now();
@@ -185,11 +208,10 @@ void Benchmark_Sequential_vs_Random() {
             out_file << size << ",seq," << r << "," << (int)((ops / time_ms) * 1000.0) << "\n";
         }
 
+        // --- WARM-UP: prime cache for random ---
+        { ValueType val; for (int i = 0; i < size; ++i) tree.GetValue(keys[i], &val); }
+
         // Random: rpt times
-        std::mt19937 rng(42);
-        std::uniform_int_distribution<int> dist(1, size);
-        std::vector<int> keys(size);
-        for (int i = 0; i < size; ++i) keys[i] = dist(rng);
 
         for (int r = 0; r < rpt; ++r) {
             auto time_start = std::chrono::high_resolution_clock::now();
@@ -337,6 +359,15 @@ void Benchmark_WorkingSet_Throughput() {
             if (p) {
                 std::memset(p->GetData(), static_cast<char>(i), PAGE_SIZE);
                 bp.UnpinPage(pids[i], true);
+            }
+        }
+
+        // --- WARM-UP: prime cache ---
+        {
+            for (int i = 0; i < total_accesses / 10; ++i) {
+                int idx = i % ws;
+                Page* p = bp.FetchPage(pids[idx]);
+                if (p) bp.UnpinPage(pids[idx], false);
             }
         }
 

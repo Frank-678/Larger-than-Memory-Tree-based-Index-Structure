@@ -26,35 +26,49 @@ def plot_with_repeats(ax, data, x_col, y_col, run_col,
                       color, marker, label='',
                       logx=False, fill=True,
                       avg_linewidth=2.5, individual_alpha=0.3,
-                      err_band_color=None):
+                      err_band_color=None, warmup_runs=1):
     """
-    Plot repeated-measures data: individual run traces (faint) +
-    mean line (bold) + stddev shading.
+    Plot repeated-measures data with warmup isolation.
+
+    1. Warmup runs (< warmup_runs) are drawn as faint dashed lines
+       to reveal cold-start transient behaviour.
+    2. Mean / std are computed ONLY on steady-state runs (>= warmup_runs),
+       ensuring the main curve reflects pure algorithmic throughput.
     """
     if err_band_color is None:
         err_band_color = color
 
-    # Individual runs as faint lines without markers
+    # 1. Individual run traces: warmup = dashed, steady = solid
     for run_id in sorted(data[run_col].unique()):
         run_data = data[data[run_col] == run_id].sort_values(x_col)
+        is_warmup = run_id < warmup_runs
+        ls = '--' if is_warmup else '-'
+        alpha_val = 0.15 if is_warmup else individual_alpha
         ax.plot(run_data[x_col], run_data[y_col],
-                color=color, linewidth=0.8, alpha=individual_alpha,
-                marker='', linestyle='-')
+                color=color, linewidth=0.8, linestyle=ls, alpha=alpha_val,
+                marker='', zorder=1)
 
-    # Average
-    grp = data.groupby(x_col)
+    # 2. Steady-state only: mean + std
+    steady = data[data[run_col] >= warmup_runs]
+    if steady.empty:
+        steady = data  # fallback
+
+    grp = steady.groupby(x_col)
     x_vals = grp[y_col].mean().index.values.astype(float)
     y_mean = grp[y_col].mean().values
     y_std = grp[y_col].std().values
 
+    suffix = " (Steady-state mean)" if warmup_runs > 0 else ""
     ax.plot(x_vals, y_mean, marker=marker, color=color,
-            linewidth=avg_linewidth, markersize=8, label=label)
+            linewidth=avg_linewidth, markersize=8,
+            label=f"{label}{suffix}" if label else None, zorder=3)
 
     if fill:
+        std_filled = np.where(np.isnan(y_std), 0, y_std)
         ax.fill_between(x_vals,
-                         np.maximum(y_mean - y_std, 0),
-                         y_mean + y_std,
-                         alpha=0.15, color=err_band_color)
+                         np.maximum(y_mean - std_filled, 0),
+                         y_mean + std_filled,
+                         alpha=0.15, color=err_band_color, zorder=2)
 
     if logx:
         ax.set_xscale('log')
